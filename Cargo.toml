@@ -1,0 +1,19 @@
+[package]
+name = "lx-helper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+fs-err = "3.2.2"
+junction = "1.4.1"
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1
