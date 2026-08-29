@@ -7,29 +7,30 @@ use std::process::Command;
 
 /// 将软件数据目录重定向到外部存储，并启动主程序
 #[derive(Parser)]
-#[command(about)]
+#[command(version, about)]
 struct Args {
     /// 主程序可执行文件名（相对 helper 所在目录）
     target_exe_path: String,
-    /// 原始数据目录（将被重定向）
-    src_dir: String,
-    /// 目标数据目录（实际存储位置）
-    dst_dir: String,
+    /// 重定向映射：成对出现 <原始数据目录> <目标数据目录>，可重复
+    #[arg(num_args = 2.., value_names = ["SRC_DIR", "DST_DIR"], required = true)]
+    map: Vec<String>,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let target_exe_path = &args.target_exe_path;
-    let src_dir = &args.src_dir;
-    let dst_dir = &args.dst_dir;
+    if args.map.len() % 2 != 0 {
+        anyhow::bail!("重定向映射必须成对出现（原始数据目录 + 目标数据目录）");
+    }
+
+    for [src_dir, dst_dir] in args.map.as_chunks::<2>().0 {
+        if let Err(e) = link(src_dir, dst_dir) {
+            eprintln!("连接目录失败: {e:?}");
+        }
+    }
 
     let self_exe = env::current_exe()?;
     let self_dir = self_exe.parent().context("无法获取程序运行目录")?;
-
-    if let Err(e) = link(src_dir, dst_dir) {
-        eprintln!("连接目录失败: {e:?}");
-    }
-    let target_exe_path = self_dir.join(target_exe_path);
+    let target_exe_path = self_dir.join(&args.target_exe_path);
     if fs::exists(&target_exe_path).unwrap_or(false) {
         let mut command = Command::new(&target_exe_path);
         if let Some(exe_dir) = target_exe_path.parent() {
