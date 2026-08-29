@@ -1,5 +1,5 @@
 [package]
-name = "lx-helper"
+name = "path_redirect"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,12 +8,14 @@ anyhow = "1.0.100"
 fs-err = "3.2.2"
 junction = "1.4.1"
 
-[build-dependencies]
-winres = "0.1"
-
 [profile.release]
 opt-level = "z"
 strip = true
 lto = true
 panic = "abort"
 codegen-units = 1
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
