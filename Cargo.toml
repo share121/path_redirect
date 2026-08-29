@@ -16,6 +16,7 @@ bitcode = "0.6.9"
 clap = { version = "4.6.6", features = ["derive"] }
 fs-err = "3.2.2"
 junction = "1.4.1"
+encoding_rs = "0.8"
 
 [profile.release]
 opt-level = "z"

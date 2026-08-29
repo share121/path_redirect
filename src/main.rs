@@ -1,9 +1,12 @@
 use anyhow::Context;
 use clap::Parser;
+use encoding_rs::GBK;
 use fs_err as fs;
 use std::env;
+use std::io::{Read, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
 
 /// 将软件数据目录重定向到外部存储，并启动主程序
 #[derive(Parser)]
@@ -62,22 +65,42 @@ fn link(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> anyhow::Result<()> {
         if metadata.is_symlink() || junction::exists(src).unwrap_or(false) {
             fs::remove_dir(src).context("无法移除旧的联接点")?;
         } else if metadata.is_dir() {
-            println!("正在迁移数据...");
+            eprintln!("正在迁移数据...");
             move_dir(src, dst).context("数据迁移失败")?;
-            println!("迁移完成");
+            eprintln!("迁移完成");
         } else {
             fs::remove_file(src).context("路径被文件占用，且无法删除")?;
         }
     }
     junction::create(dst, src).context("建立目录联接失败")?;
-    println!("已成功建立关联: {} -> {}", src.display(), dst.display());
+    eprintln!("已成功建立关联: {} -> {}", src.display(), dst.display());
     Ok(())
 }
 
+/// 实时把子进程的 GBK 字节流转成 UTF-8 写到当前进程的对应流。
+/// 使用流式解码器，保证一个多字节汉字被管道缓冲切到两块之间时也能完整解码。
+fn pump<R: Read + Send + 'static>(mut reader: R) {
+    let mut buf = [0u8; 4096];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                let (text, _) = GBK.decode_without_bom_handling(&buf[..n]);
+                if !text.is_empty() {
+                    eprint!("{text}");
+                    let _ = std::io::stderr().flush();
+                }
+            }
+        }
+    }
+}
+
 /// 调用系统 Robocopy 迁移数据
+///
+/// Robocopy 按系统代码页（中文 Windows 为 GBK/CP936）输出，这里通过管道实时捕获
+/// 并流式转成 UTF-8 再写回日志，避免 log.txt 同时混入 UTF-8 与 GBK 而乱码。
 fn move_dir(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    #[allow(clippy::unreadable_literal)]
-    let status = Command::new("robocopy")
+    let mut child = Command::new("robocopy")
         .arg(src)
         .arg(dst)
         .arg("/E") // 递归拷贝，包含子目录
@@ -86,7 +109,19 @@ fn move_dir(src: &Path, dst: &Path) -> anyhow::Result<()> {
         .arg("/MT:8") // 8线程开启
         .arg("/R:3") // 失败重试3次
         .arg("/W:1") // 间隔1秒
-        .status()?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("无法启动 Robocopy")?;
+
+    let stdout = child.stdout.take().context("无法获取 Robocopy stdout")?;
+    let stderr = child.stderr.take().context("无法获取 Robocopy stderr")?;
+    let t_out = thread::spawn(move || pump(stdout));
+    let t_err = thread::spawn(move || pump(stderr));
+    t_out.join().ok();
+    t_err.join().ok();
+
+    let status = child.wait().context("等待 Robocopy 结束失败")?;
     if status.code().unwrap_or(8) < 8 {
         Ok(())
     } else {
