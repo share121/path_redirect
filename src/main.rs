@@ -22,14 +22,17 @@ fn main() -> anyhow::Result<()> {
         anyhow::bail!("重定向映射必须成对出现（原始数据目录 + 目标数据目录）");
     }
 
+    let self_exe = env::current_exe()?;
+    let self_dir = self_exe.parent().context("无法获取程序运行目录")?;
+
     for [src_dir, dst_dir] in args.map.as_chunks::<2>().0 {
+        let src_dir = self_dir.join(src_dir);
+        let dst_dir = self_dir.join(dst_dir);
         if let Err(e) = link(src_dir, dst_dir) {
             eprintln!("连接目录失败: {e:?}");
         }
     }
 
-    let self_exe = env::current_exe()?;
-    let self_dir = self_exe.parent().context("无法获取程序运行目录")?;
     let target_exe_path = self_dir.join(&args.target_exe_path);
     if fs::exists(&target_exe_path).unwrap_or(false) {
         let mut command = Command::new(&target_exe_path);
