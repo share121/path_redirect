@@ -17,6 +17,10 @@ struct Args {
     /// 重定向映射：成对出现 <原始数据目录> <目标数据目录>，可重复
     #[arg(num_args = 2.., value_names = ["SRC_DIR", "DST_DIR"], required = true)]
     map: Vec<String>,
+    /// 透传给主程序的额外参数，写在 -- 之后
+    /// 例如：helper.exe target s1 d1 -- --proxy=127.0.0.1 --no-sandbox
+    #[arg(last = true, num_args = 0.., value_name = "ARGS")]
+    passthrough: Vec<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -41,6 +45,9 @@ fn main() -> anyhow::Result<()> {
         let mut command = Command::new(&target_exe_path);
         if let Some(exe_dir) = target_exe_path.parent() {
             command.current_dir(exe_dir);
+        }
+        for arg in &args.passthrough {
+            command.arg(arg);
         }
         if let Err(e) = command.spawn() {
             eprintln!("无法启动主程序: {e:?}");
@@ -126,5 +133,48 @@ fn move_dir(src: &Path, dst: &Path) -> anyhow::Result<()> {
         Ok(())
     } else {
         anyhow::bail!("Robocopy 迁移任务失败，退出码: {:?}", status.code())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn passthrough_collects_args_after_double_dash() {
+        let args = Args::try_parse_from([
+            "path_redirect",
+            "app.exe",
+            "s1",
+            "d1",
+            "s2",
+            "d2",
+            "--",
+            "--proxy=127.0.0.1",
+            "--flag",
+        ])
+        .unwrap();
+        assert_eq!(args.target_exe_path, "app.exe");
+        assert_eq!(
+            args.map,
+            vec![
+                "s1".to_string(),
+                "d1".to_string(),
+                "s2".to_string(),
+                "d2".to_string()
+            ]
+        );
+        assert_eq!(
+            args.passthrough,
+            vec!["--proxy=127.0.0.1".to_string(), "--flag".to_string()]
+        );
+    }
+
+    #[test]
+    fn no_passthrough_when_double_dash_absent() {
+        let args = Args::try_parse_from(["path_redirect", "app.exe", "s1", "d1"]).unwrap();
+        assert_eq!(args.map, vec!["s1".to_string(), "d1".to_string()]);
+        assert_eq!(args.passthrough, Vec::<String>::new());
     }
 }
