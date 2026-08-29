@@ -1,10 +1,18 @@
 [package]
 name = "path_redirect"
+description = "将软件数据目录重定向到外部存储，并启动主程序"
 version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/share121/path_redirect"
+readme = "README.md"
 edition = "2024"
+keywords = ["redirect", "path", "data", "directory", "external storage"]
+categories = ["command-line-utilities", "file-system", "system-programming"]
 
 [dependencies]
 anyhow = "1.0.100"
+bitcode = "0.6.9"
+clap = { version = "4.6.6", features = ["derive"] }
 fs-err = "3.2.2"
 junction = "1.4.1"
 
@@ -17,5 +25,7 @@ codegen-units = 1
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+multiple_crate_versions = "allow"
 nursery = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }

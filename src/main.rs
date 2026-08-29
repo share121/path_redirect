@@ -1,19 +1,27 @@
 use anyhow::Context;
+use clap::Parser;
 use fs_err as fs;
 use std::env;
 use std::path::Path;
 use std::process::Command;
 
-fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 4 {
-        println!("用法: helper.exe <target_exe_path> <src_dir> <dst_dir>");
-        return Ok(());
-    }
+/// 将软件数据目录重定向到外部存储，并启动主程序
+#[derive(Parser)]
+#[command(about)]
+struct Args {
+    /// 主程序可执行文件名（相对 helper 所在目录）
+    target_exe_path: String,
+    /// 原始数据目录（将被重定向）
+    src_dir: String,
+    /// 目标数据目录（实际存储位置）
+    dst_dir: String,
+}
 
-    let target_exe_path = &args[1];
-    let src_dir = &args[2];
-    let dst_dir = &args[3];
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    let target_exe_path = &args.target_exe_path;
+    let src_dir = &args.src_dir;
+    let dst_dir = &args.dst_dir;
 
     let self_exe = env::current_exe()?;
     let self_dir = self_exe.parent().context("无法获取程序运行目录")?;
